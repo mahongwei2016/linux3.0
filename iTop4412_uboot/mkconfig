@@ -1,0 +1,150 @@
+#!/bin/sh -e
+
+# Script to create header files and links to configure
+# U-Boot for a specific board.
+#
+# Parameters:  Target  Architecture  CPU  Board [VENDOR] [SOC]
+#
+# (C) 2002-2006 DENX Software Engineering, Wolfgang Denk <wd@denx.de>
+#
+
+APPEND=no	# Default: Create new config file
+#BOARD_NAME=""	# Name to print in make output
+TARGETS=""
+
+echo "CoreBoard  is $7...... "
+
+if   [ "$7" = "SCP_1GDDR" ]  ||   [ "$7" = "SCP_2GDDR" ] || [ "$7" = "POP_1GDDR" ]  ||   [ "$7" = "POP_2GDDR" ]
+then 
+      BOARD_NAME="itop_4412_android"
+      echo "CoreBoard OS is android or linux...... "
+
+elif [ "$7" = "SCP_1GDDR_Ubuntu" ]  ||  [ "$7" = "SCP_2GDDR_Ubuntu" ] || [ "$7" = "POP_1GDDR_Ubuntu" ] ||  [ "$7" = "POP_2GDDR_Ubuntu" ]
+then
+      BOARD_NAME="itop_4412_ubuntu"
+      echo "CoreBoard OS is Ubuntu...... "
+else
+      echo "unknown coreboard type and os type......"
+fi
+	
+while [ $# -gt 0 ] ; do
+	case "$1" in
+	--) shift ; break ;;
+	-a) shift ; APPEND=yes ;;
+#	-n) shift ; BOARD_NAME="${1%%_config}" ; shift ;;
+	-t) shift ; TARGETS="`echo $1 | sed 's:_: :g'` ${TARGETS}" ; shift ;;
+	*)  break ;;
+	esac
+done
+
+[ "${BOARD_NAME}" ] || BOARD_NAME="$1"
+
+[ $# -lt 4 ] && exit 1
+[ $# -gt 7 ] && exit 1
+
+if [ "${ARCH}" -a "${ARCH}" != "$2" ]; then
+	echo "Failed: \$ARCH=${ARCH}, should be '$2' for ${BOARD_NAME}" 1>&2
+	exit 1
+fi
+
+echo "Configuring for ${BOARD_NAME} board..."
+
+#
+# Create link to architecture specific headers
+#
+if [ "$SRCTREE" != "$OBJTREE" ] ; then
+	mkdir -p ${OBJTREE}/include
+	mkdir -p ${OBJTREE}/include2
+	cd ${OBJTREE}/include2
+	rm -f asm
+	ln -s ${SRCTREE}/include/asm-$2 asm
+	LNPREFIX="../../include2/asm/"
+	cd ../include
+	rm -rf asm-$2
+	rm -f asm
+	mkdir asm-$2
+	ln -s asm-$2 asm
+else
+	cd ./include
+	rm -f asm
+	ln -s asm-$2 asm
+fi
+
+rm -f asm-$2/arch
+
+if [ -z "$6" -o "$6" = "NULL" ] ; then
+	ln -s ${LNPREFIX}arch-$3 asm-$2/arch
+else
+	ln -s ${LNPREFIX}arch-$6 asm-$2/arch
+fi
+
+if [ "$2" = "arm" ] ; then
+	rm -f asm-$2/proc
+	ln -s ${LNPREFIX}proc-armv asm-$2/proc
+fi
+
+#
+# Create include file for Make
+#
+echo "ARCH   = $2" >  config.mk
+echo "CPU    = $3" >> config.mk
+echo "BOARD  = $4" >> config.mk
+
+[ "$5" ] && [ "$5" != "NULL" ] && echo "VENDOR = $5" >> config.mk
+
+[ "$6" ] && [ "$6" != "NULL" ] && echo "SOC    = $6" >> config.mk
+
+# Assign board directory to BOARDIR variable
+if [ -z "$5" -o "$5" = "NULL" ] ; then
+    BOARDDIR=$4
+else
+    BOARDDIR=$5/$4
+fi
+
+
+
+#add by dg for kinds of coreboard
+if   [ "$7" = "SCP_1GDDR" ] ||   [ "$7" = "SCP_2GDDR" ] || [ "$7" = "SCP_1GDDR_Ubuntu" ] ||   [ "$7" = "SCP_2GDDR_Ubuntu" ]
+then 
+     echo "CORE   =  SCP" >> config.mk
+     ln -sf ${SRCTREE}/board/samsung/smdkc210/lowlevel_init_SCP.S  ${SRCTREE}/board/samsung/smdkc210/lowlevel_init.S	
+     ln -sf ${SRCTREE}/cpu/arm_cortexa9/s5pc210/cpu_init_SCP.S     ${SRCTREE}/cpu/arm_cortexa9/s5pc210/cpu_init.S
+
+elif [ "$7" = "POP_1GDDR" ]  ||  [ "$7" = "POP_2GDDR" ] || [ "$7" = "POP_1GDDR_Ubuntu" ] ||  [ "$7" = "POP_2GDDR_Ubuntu" ]
+then
+     echo "CORE   =  POP" >>  config.mk
+     ln -sf ${SRCTREE}/board/samsung/smdkc210/lowlevel_init_POP.S  ${SRCTREE}/board/samsung/smdkc210/lowlevel_init.S	
+     ln -sf ${SRCTREE}/cpu/arm_cortexa9/s5pc210/cpu_init_POP.S     ${SRCTREE}/cpu/arm_cortexa9/s5pc210/cpu_init.S
+else
+      echo "make config error,please use correct params......"
+      exit 0
+fi
+
+
+#
+# Create board specific header file
+#
+if [ "$APPEND" = "yes" ]	# Append to existing config file
+then
+	echo >> config.h
+else
+	> config.h		# Create new config file
+fi
+echo "/* Automatically generated - do not edit */" >>config.h
+
+for i in ${TARGETS} ; do
+	echo "#define CONFIG_MK_${i} 1" >>config.h ;
+done
+
+#add by dg for all itop4412 type boards
+
+[ "$7" ] && [ "$7" != "NULL" ] && echo "#define CONFIG_$7" >> config.h
+
+cat << EOF >> config.h
+#define CONFIG_BOARDDIR board/$BOARDDIR
+#include <config_defaults.h>
+#include <configs/$BOARD_NAME.h>
+#include <asm/config.h>
+EOF
+
+exit 0

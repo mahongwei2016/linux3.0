@@ -1,0 +1,12 @@
+menu "UNA-PLUS 3G Modem"
+#
+# COMBO chip configuration
+#
+config UNAPLUS
+	bool "UNA-PLUS 3G Modem"
+	default y
+	help
+	  UNA-PLUS 3G Modem
+
+endmenu
+
